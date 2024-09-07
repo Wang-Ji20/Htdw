@@ -6,9 +6,17 @@
 
 (define sprite (circle 5 "solid" "red"))
 
-; the *world* is a position in the scene
+; the *world* contains:
+; - the position of player: posn
+; - the position of a enemy: posn
 
-(define world (make-posn 0 0))
+(define-struct world (player enemy))
+
+(define start-state
+  (make-world
+   (make-posn 0 0)
+   (make-posn 100 100)))
+
 (define WIDTH 600)
 (define HEIGHT 800)
 
@@ -81,7 +89,19 @@
 
 (define (move-sprite sprite)
   (move-sprite-right (move-sprite-down sprite)))
-  
+
+; move player in the world
+
+(define (move-player how-to-move world)
+  (make-world
+   (how-to-move (world-player world))
+   (world-enemy world)))
+
+(define (move-enemy how-to-move world)
+  (make-world
+   (world-player world)
+   (how-to-move (world-enemy world))))
+
 (check-expect
  (move-sprite (make-posn 300 300))
  (make-posn 310 305))
@@ -89,24 +109,33 @@
 (define BACKGROUND
   (empty-scene WIDTH HEIGHT))
 
-; move the sprite on key event
-(define (alter-sprite-on-key sprite key)
+; move the player on key event
+(define (alter-player-on-key world key)
   (cond
-    [(key=? key "w") (move-sprite-up sprite)]
-    [(key=? key "s") (move-sprite-down sprite)]
-    [(key=? key "a") (move-sprite-left sprite)]
-    [(key=? key "d") (move-sprite-right sprite)]
-    [else sprite]))
+    [(key=? key "w") (move-player move-sprite-up world)]
+    [(key=? key "s") (move-player move-sprite-down world)]
+    [(key=? key "a") (move-player move-sprite-left world)]
+    [(key=? key "d") (move-player move-sprite-right world)]
+    [else world]))
+
+; control the enemy on tick. always turn right
+(define (move-enemy-in-world world)
+  (move-enemy move-sprite-right world))
 
 ; render the sprite on our world.
-(define (place-sprite-at-pos x)
+(define (place-sprite-at-pos x background)
   (place-image sprite
                (posn-x x)
                (posn-y x)
-               BACKGROUND))
+               background))
+
+; render enemy and player in our world
+(define (render world)
+  (place-sprite-at-pos (world-enemy world)
+                       (place-sprite-at-pos (world-player world) BACKGROUND)))
 
 (define main
-  (big-bang world
-    ;[on-tick move-sprite]
-    [on-key alter-sprite-on-key]
-    [to-draw place-sprite-at-pos]))
+  (big-bang start-state
+    [on-tick move-enemy-in-world]
+    [on-key alter-player-on-key]
+    [to-draw render]))
