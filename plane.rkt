@@ -8,14 +8,14 @@
 
 ; the *world* contains:
 ; - the position of player: posn
-; - the position of a enemy: posn
+; - a list of position of enemies: posn list
 
 (define-struct world (player enemy))
 
 (define start-state
   (make-world
    (make-posn 0 0)
-   (make-posn 100 100)))
+   (cons (make-posn 200 200) (cons (make-posn 100 100) '()))))
 
 (define WIDTH 600)
 (define HEIGHT 800)
@@ -97,10 +97,10 @@
    (how-to-move (world-player world))
    (world-enemy world)))
 
-(define (move-enemy how-to-move world)
+(define (move-enemies how-to-move world)
   (make-world
    (world-player world)
-   (how-to-move (world-enemy world))))
+   (map how-to-move (world-enemy world))))
 
 (check-expect
  (move-sprite (make-posn 300 300))
@@ -120,7 +120,7 @@
 
 ; control the enemy on tick. always turn right
 (define (move-enemy-in-world world)
-  (move-enemy move-sprite-right world))
+  (move-enemies move-sprite-right world))
 
 ; render the sprite on our world.
 (define (place-sprite-at-pos x background)
@@ -129,10 +129,20 @@
                (posn-y x)
                background))
 
+(define (fold x initState accumulator)
+  (cond
+    [(eq? x '()) initState]
+    [else (fold (cdr x) (accumulator (car x) initState) accumulator)]))
+
+(define (place-enemies world)
+  (fold (world-enemy world) BACKGROUND
+        (λ (enemy-pos bg)
+          (place-sprite-at-pos enemy-pos bg))))
+
 ; render enemy and player in our world
 (define (render world)
-  (place-sprite-at-pos (world-enemy world)
-                       (place-sprite-at-pos (world-player world) BACKGROUND)))
+  (place-sprite-at-pos (world-player world)
+                       (place-enemies world)))
 
 (define main
   (big-bang start-state
