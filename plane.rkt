@@ -9,13 +9,20 @@
 ; the *world* contains:
 ; - the position of player: posn
 ; - a list of position of enemies: posn list
+; - a list of *projectiles*
+;   projectiles: when player or enemy touches other's projectiles, they died.
+;                but they will not die if the projectile is emitted by themselves.
 
-(define-struct world (player enemy))
+(define-struct projectile (emitter posn))
+
+(define-struct world (player enemy projectiles))
 
 (define start-state
   (make-world
    (make-posn 0 0)
-   (cons (make-posn 200 200) (cons (make-posn 100 100) '()))))
+   (cons (make-posn 200 200) (cons (make-posn 100 100) '()))
+   '()
+   ))
 
 (define WIDTH 600)
 (define HEIGHT 800)
@@ -95,12 +102,8 @@
 (define (move-player how-to-move world)
   (make-world
    (how-to-move (world-player world))
-   (world-enemy world)))
-
-(define (move-enemies how-to-move world)
-  (make-world
-   (world-player world)
-   (map how-to-move (world-enemy world))))
+   (world-enemy world)
+   (world-projectiles world)))
 
 (check-expect
  (move-sprite (make-posn 300 300))
@@ -118,9 +121,13 @@
     [(key=? key "d") (move-player move-sprite-right world)]
     [else world]))
 
-; control the enemy on tick. always turn right
-(define (move-enemy-in-world world)
-  (move-enemies move-sprite-right world))
+; on each tick, we let player emit one projectile, then let the projectile and enemy move.
+(define (world-tick world)
+  (make-world
+   (world-player world)
+   ; control the enemy on tick. always turn right
+   (map move-sprite-right (world-enemy world))
+   (cons (world-player world) (map move-sprite-up (world-projectiles world)))))
 
 ; render the sprite on our world.
 (define (place-sprite-at-pos x background)
@@ -134,18 +141,31 @@
     [(eq? x '()) initState]
     [else (fold (cdr x) (accumulator (car x) initState) accumulator)]))
 
-(define (place-enemies world)
-  (fold (world-enemy world) BACKGROUND
+(define (place-entities-on entities bg)
+  (fold entities bg
         (λ (enemy-pos bg)
           (place-sprite-at-pos enemy-pos bg))))
 
 ; render enemy and player in our world
 (define (render world)
   (place-sprite-at-pos (world-player world)
-                       (place-enemies world)))
+                       (place-entities-on (world-enemy world)
+                                          (place-entities-on (world-projectiles world) BACKGROUND))))
+
+(define (anyof x predicate)
+  (cond
+    [(eq? x '()) #f]
+    [(predicate (car x)) #t]
+    [else (anyof (cdr x) predicate)]))
+
+; if the player touches the enemy, we consider the game ends.
+(define (lose world)
+  (anyof (world-enemy world)
+         (λ (enemy) (equal? enemy (world-player world)))))
 
 (define main
   (big-bang start-state
-    [on-tick move-enemy-in-world]
+    [on-tick world-tick]
     [on-key alter-player-on-key]
-    [to-draw render]))
+    [to-draw render]
+    [stop-when lose]))
