@@ -1,6 +1,5 @@
-;; The first three lines of this file were inserted by DrRacket. They record metadata
-;; about the language level of this file in a form that our tools can easily process.
-#reader(lib "htdp-advanced-reader.ss" "lang")((modname plane) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #t #t none #f () #f)))
+#lang htdp/asl
+
 (require 2htdp/image)
 (require 2htdp/universe)
 
@@ -74,7 +73,7 @@
 
 (define move-pos-left
   (move-pos-horizontal confined-move-left))
-  
+
 ; move pos's y coordinate
 
 (define down-speed (/ speed 2))
@@ -127,11 +126,11 @@
 ;
 (define (projectiles-tick player projectiles)
   (let ([projectiles (cond
-          [(eq? (player-cd player) CD) (cons (player-pos player) projectiles)]
-          [else projectiles])])
-        (filter (λ (projectile)
-                  (not (eq? (posn-y projectile) 0)))
-                (map move-pos-up projectiles))))
+                       [(eq? (player-cd player) CD) (cons (player-pos player) projectiles)]
+                       [else projectiles])])
+    (filter (λ (projectile)
+              (not (eq? (posn-y projectile) 0)))
+            (map move-pos-up projectiles))))
 
 (define CD 10)
 
@@ -140,7 +139,10 @@
                (let ([cd (player-cd player)])
                  (cond
                    [(eq? cd 0) CD]
-                   [else (- cd 1)])))) 
+                   [else (- cd 1)]))))
+
+(define (enemy-tick enemy)
+  (map move-pos-right enemy))
 
 (define (world-tick world)
   (let ([player (world-player world)]
@@ -149,7 +151,7 @@
     (make-world
      (player-tick player)
      ; control the enemy on tick. always turn right
-     (map move-pos-right enemy)
+     (enemy-tick enemy)
      (projectiles-tick player projectiles))))
 
 ; render the sprite on our world.
@@ -170,12 +172,22 @@
           (place-sprite-at-pos-in sprite enemy-pos bg))))
 
 ; render enemy and player in our world
-; TODO: refactor this
+(define (draw-player-on player canvas)
+  (place-sprite-at-pos-in player-sprite (player-pos player) canvas))
+
+(define (draw-enemies-on enemies canvas)
+  (place-entities-on enemies canvas))
+
+(define (draw-projectiles-on projectiles canvas)
+  (place-entities-on projectiles canvas))
+
 (define (render world)
-  (place-sprite-at-pos-in player-sprite
-                          (player-pos (world-player world))
-                          (place-entities-on (world-enemy world)
-                                             (place-entities-on (world-projectiles world) BACKGROUND))))
+  (let ([player (world-player world)]
+        [enemy (world-enemy world)]
+        [projectiles (world-projectiles world)])
+    (draw-player-on player
+                    (draw-enemies-on enemy
+                                     (draw-projectiles-on projectiles BACKGROUND)))))
 
 (define (anyof x predicate)
   (cond
