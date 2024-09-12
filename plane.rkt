@@ -3,6 +3,15 @@
 (require 2htdp/image)
 (require 2htdp/universe)
 
+(define (anyof x predicate?)
+  (cond
+    [(eq? x '()) #f]
+    [(predicate? (car x)) #t]
+    [else (anyof (cdr x) predicate?)]))
+
+(define (noneof x p?)
+  (not (anyof x p?)))
+
 (define sprite (circle 5 "solid" "red"))
 
 (define player-sprite (bitmap "./marisa.png"))
@@ -11,10 +20,8 @@
 ; - the position of player: posn
 ; - a list of position of enemies: posn list
 ; - a list of *projectiles*
-;   projectiles: when player or enemy touches other's projectiles, they died.
+;   projectiles: TODO: when player or enemy touches other's projectiles, they died.
 ;                but they will not die if the projectile is emitted by themselves.
-
-(define-struct projectile (emitter posn))
 
 (define-struct player (pos cd))
 
@@ -141,8 +148,14 @@
                    [(eq? cd 0) CD]
                    [else (- cd 1)]))))
 
-(define (enemy-tick enemy)
-  (map move-pos-right enemy))
+(define (remove-enemy enemies projectiles)
+  (filter (λ (enemy)
+            (noneof projectiles
+                    (λ (projectile) (equal? enemy projectile))))
+          enemies))
+
+(define (enemy-tick enemies projectiles)
+  (map move-pos-right (remove-enemy enemies projectiles)))
 
 (define (world-tick world)
   (let ([player (world-player world)]
@@ -151,7 +164,7 @@
     (make-world
      (player-tick player)
      ; control the enemy on tick. always turn right
-     (enemy-tick enemy)
+     (enemy-tick enemy projectiles)
      (projectiles-tick player projectiles))))
 
 ; render the sprite on our world.
@@ -188,12 +201,6 @@
     (draw-player-on player
                     (draw-enemies-on enemy
                                      (draw-projectiles-on projectiles BACKGROUND)))))
-
-(define (anyof x predicate)
-  (cond
-    [(eq? x '()) #f]
-    [(predicate (car x)) #t]
-    [else (anyof (cdr x) predicate)]))
 
 ; if the player touches the enemy, we consider the game ends.
 (define (lose world)
