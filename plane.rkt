@@ -29,6 +29,8 @@
 
 (define-struct enemy (velocity pos))
 
+(define-struct projectile (velocity pos emitter))
+
 (define-struct world (player enemy projectiles))
 
 (define start-state
@@ -64,9 +66,14 @@
 ; constraint y in the world
 (define confine-pos-y (make-clamper 0 HEIGHT))
 
-; accelarate player in the world
+; accelerate
+(define (accelerate a v)
+  (make-velocity (+ (velocity-x a) (velocity-x v))
+                 (+ (velocity-y a) (velocity-y v))))
 
-(define (accelarate velocity world)
+; set player velocity in the world
+
+(define (set-velocity velocity world)
   (let ([player (world-player world)])
     (make-world
      (make-player velocity
@@ -81,11 +88,14 @@
 ; move the player on key event
 (define (alter-player-on-key world key)
   (cond
-    [(key=? key "w") (accelarate (make-velocity 0 (- 10)) world)]
-    [(key=? key "s") (accelarate (make-velocity 0 10) world)]
-    [(key=? key "a") (accelarate (make-velocity (- 10) 0) world)]
-    [(key=? key "d") (accelarate (make-velocity 10 0) world)]
+    [(key=? key "w") (set-velocity (make-velocity 0 (- 10)) world)]
+    [(key=? key "s") (set-velocity (make-velocity 0 10) world)]
+    [(key=? key "a") (set-velocity (make-velocity (- 10) 0) world)]
+    [(key=? key "d") (set-velocity (make-velocity 10 0) world)]
     [else world]))
+
+(define (clear-player-velocity world key)
+  (set-velocity empty-velocity world))
 
 ;==============================================  Tick  ==============================================
 
@@ -105,41 +115,74 @@
         [velocity (player-velocity player)]
         [cd (player-cd player)])
     (make-player
-     empty-velocity
+     velocity
      (move pos velocity)
      (cond
        [(eq? cd 0) CD]
        [else (- cd 1)]))))
 
+; need projectile radius to calculate the collision between enemy and projectile. If their distance
+; is less than 5, then we consider they are collided
+(define projectile-radius 5)
+
+(define (eulicid-distance-square p1 p2)
+  (let* ([absx (abs (- (posn-x p1) (posn-x p2)))]
+         [absy (abs (- (posn-y p1) (posn-y p2)))])
+    (+ (* absx absx) (* absy absy))))
+
+(define (hit? projectile enemy)
+  (let* ([p-pos (projectile-pos projectile)]
+         [e-pos (enemy-pos enemy)])
+    (< (eulicid-distance-square p-pos e-pos) 25)))
+
 (define (remove-enemy enemies projectiles)
   (filter (λ (enemy)
             (noneof projectiles
-                    (λ (projectile) (equal? (enemy-pos enemy) projectile))))
+                    (λ (projectile) (and (equal? (projectile-emitter projectile) 'player)
+                                         (hit? projectile enemy)))))
           enemies))
 
-; TODO: move enemies, left -> right -> left ...
-; TODO: fix: the projectiles are by jump, rather than by slide
 ; TODO: spawn enemies
 ; TODO: enemy spawn projectiles
+
+; if the enemy hits the wall, it bounce by reversing its speed
+; pos * velocity -> velocity
+(define (bounce velocity position)
+  (let ([vx (velocity-x velocity)]
+        [vy (velocity-y velocity)]
+        [x (posn-x position)]
+        [y (posn-y position)])
+    (make-velocity (if (or (eq? x WIDTH) (eq? x 0)) (- vx) vx)
+                   (if (or (eq? y HEIGHT) (eq? y 0)) (- vy) vy))))
+
+(check-expect (bounce (make-velocity 20 0) (make-posn WIDTH 0)) (make-velocity (- 20) 0))
+
 (define (move-enemy enemy)
-  (let ([pos (enemy-pos enemy)]
-        [velocity (enemy-velocity enemy)])
+  (let* ([pos (enemy-pos enemy)]
+         [velocity (bounce (enemy-velocity enemy) pos)])
     (make-enemy velocity (move pos velocity))))
 
 (define (enemy-tick enemies projectiles)
   (map move-enemy (remove-enemy enemies projectiles)))
 
-(define always-up-velocity (make-velocity 0 (- 10)))
+(define always-up-velocity (make-velocity 0 (- 50)))
 
 (define (move-projectile p)
-  (move p always-up-velocity))
+  (let ([vel (projectile-velocity p)])
+    (make-projectile  vel
+                      (move (projectile-pos p) vel)
+                      (projectile-emitter p))))
 
+; TODO: fix Doppler effect
 (define (projectiles-tick player projectiles)
   (let ([projectiles (cond
-                       [(eq? (player-cd player) CD) (cons (player-pos player) projectiles)]
+                       [(eq? (player-cd player) CD) (cons (make-projectile (accelerate (player-velocity player) always-up-velocity)
+                                                                           (player-pos player)
+                                                                           'player)
+                                                          projectiles)]
                        [else projectiles])])
     (filter (λ (projectile)
-              (not (eq? (posn-y projectile) 0)))
+              (not (eq? (posn-y (projectile-pos projectile)) 0)))
             (map move-projectile projectiles))))
 
 (define (world-tick world)
@@ -179,7 +222,7 @@
   (place-entities-on (map enemy-pos enemies) canvas))
 
 (define (draw-projectiles-on projectiles canvas)
-  (place-entities-on projectiles canvas))
+  (place-entities-on (map projectile-pos projectiles) canvas))
 
 (define (render world)
   (let ([player (world-player world)]
@@ -198,5 +241,6 @@
   (big-bang start-state
     [on-tick world-tick]
     [on-key alter-player-on-key]
+    [on-release clear-player-velocity]
     [to-draw render]
     [stop-when lose]))
