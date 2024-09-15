@@ -12,9 +12,11 @@
 (define (noneof x p?)
   (not (anyof x p?)))
 
-(define sprite (circle 5 "solid" "red"))
+(define projectile-sprite (circle 5 "solid" "red"))
 
 (define player-sprite (bitmap "./marisa.png"))
+
+(define enemy-sprite (bitmap "./cirno.png"))
 
 ; the *world* contains:
 ; - the position of player: posn
@@ -26,23 +28,25 @@
 (define-struct velocity (x y))
 
 (define-struct player (velocity pos cd))
+(define PLAYER-SPEED 10)
 
 (define-struct enemy (velocity pos))
+(define ENEMY-SPEED 10)
 
 (define-struct projectile (velocity pos emitter))
+(define PROJECTILE-SPEED 50)
 
 (define-struct world (player enemy projectiles))
+(define WIDTH 600)
+(define HEIGHT 800)
 
 (define start-state
   (make-world
-   (make-player (make-velocity 0 0) (make-posn 0 0) 0)
-   (cons (make-enemy (make-velocity 20 0) (make-posn 200 200))
-         (cons (make-enemy (make-velocity 20 0) (make-posn 100 100)) '()))
+   (make-player (make-velocity 0 0) (make-posn WIDTH HEIGHT) 0)
+   (cons (make-enemy (make-velocity ENEMY-SPEED 0) (make-posn 200 200))
+         (cons (make-enemy (make-velocity ENEMY-SPEED 0) (make-posn 100 100)) '()))
    '()
    ))
-
-(define WIDTH 600)
-(define HEIGHT 800)
 
 (define empty-velocity (make-velocity 0 0))
 
@@ -88,10 +92,10 @@
 ; move the player on key event
 (define (alter-player-on-key world key)
   (cond
-    [(key=? key "w") (set-velocity (make-velocity 0 (- 10)) world)]
-    [(key=? key "s") (set-velocity (make-velocity 0 10) world)]
-    [(key=? key "a") (set-velocity (make-velocity (- 10) 0) world)]
-    [(key=? key "d") (set-velocity (make-velocity 10 0) world)]
+    [(key=? key "w") (set-velocity (make-velocity 0 (- PLAYER-SPEED)) world)]
+    [(key=? key "s") (set-velocity (make-velocity 0 PLAYER-SPEED) world)]
+    [(key=? key "a") (set-velocity (make-velocity (- PLAYER-SPEED) 0) world)]
+    [(key=? key "d") (set-velocity (make-velocity PLAYER-SPEED 0) world)]
     [else world]))
 
 (define (clear-player-velocity world key)
@@ -108,7 +112,7 @@
   (make-posn (confine-pos-x (+ (posn-x s) (velocity-x v)))
              (confine-pos-y (+ (posn-y s) (velocity-y v)))))
 
-(define CD 10)
+(define CD 2)
 
 (define (player-tick player)
   (let ([pos (player-pos player)]
@@ -123,17 +127,21 @@
 
 ; need projectile radius to calculate the collision between enemy and projectile. If their distance
 ; is less than 5, then we consider they are collided
-(define projectile-radius 5)
+(define PROJECTILE-RADIUS 5)
 
 (define (eulicid-distance-square p1 p2)
   (let* ([absx (abs (- (posn-x p1) (posn-x p2)))]
          [absy (abs (- (posn-y p1) (posn-y p2)))])
     (+ (* absx absx) (* absy absy))))
 
+(define ENEMY-HITBOX-DIAMETER 26)
+
+(define (math-square x) (* x x))
+
 (define (hit? projectile enemy)
   (let* ([p-pos (projectile-pos projectile)]
          [e-pos (enemy-pos enemy)])
-    (< (eulicid-distance-square p-pos e-pos) 25)))
+    (< (eulicid-distance-square p-pos e-pos) (math-square (+ ENEMY-HITBOX-DIAMETER PROJECTILE-RADIUS)))))
 
 (define (remove-enemy enemies projectiles)
   (filter (λ (enemy)
@@ -165,7 +173,7 @@
 (define (enemy-tick enemies projectiles)
   (map move-enemy (remove-enemy enemies projectiles)))
 
-(define always-up-velocity (make-velocity 0 (- 50)))
+(define always-up-velocity (make-velocity 0 (- PROJECTILE-SPEED)))
 
 (define (move-projectile p)
   (let ([vel (projectile-velocity p)])
@@ -173,7 +181,6 @@
                       (move (projectile-pos p) vel)
                       (projectile-emitter p))))
 
-; TODO: fix Doppler effect
 (define (projectiles-tick player projectiles)
   (let ([projectiles (cond
                        [(eq? (player-cd player) CD) (cons (make-projectile (accelerate (player-velocity player) always-up-velocity)
@@ -209,7 +216,7 @@
     [(eq? x '()) initState]
     [else (fold (cdr x) (accumulator (car x) initState) accumulator)]))
 
-(define (place-entities-on entities bg)
+(define (place-entities-on entities sprite bg)
   (fold entities bg
         (λ (entity-pos bg)
           (place-sprite-at-pos-in sprite entity-pos bg))))
@@ -219,10 +226,10 @@
   (place-sprite-at-pos-in player-sprite (player-pos player) canvas))
 
 (define (draw-enemies-on enemies canvas)
-  (place-entities-on (map enemy-pos enemies) canvas))
+  (place-entities-on (map enemy-pos enemies) enemy-sprite canvas))
 
 (define (draw-projectiles-on projectiles canvas)
-  (place-entities-on (map projectile-pos projectiles) canvas))
+  (place-entities-on (map projectile-pos projectiles) projectile-sprite canvas))
 
 (define (render world)
   (let ([player (world-player world)]
