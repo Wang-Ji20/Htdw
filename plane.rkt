@@ -32,20 +32,22 @@
 
 (define-struct enemy (velocity pos))
 (define ENEMY-SPEED 10)
+(define ENEMY-STARTING-VELOCITY (make-velocity ENEMY-SPEED 0))
 
 (define-struct projectile (velocity pos emitter))
 (define PROJECTILE-SPEED 50)
 
-(define-struct world (player enemy projectiles))
+(define-struct world (player enemy projectiles enemy-spawn-cd))
 (define WIDTH 600)
 (define HEIGHT 800)
 
 (define start-state
   (make-world
    (make-player (make-velocity 0 0) (make-posn WIDTH HEIGHT) 0)
-   (cons (make-enemy (make-velocity ENEMY-SPEED 0) (make-posn 200 200))
-         (cons (make-enemy (make-velocity ENEMY-SPEED 0) (make-posn 100 100)) '()))
+   (cons (make-enemy ENEMY-STARTING-VELOCITY (make-posn 200 200))
+         (cons (make-enemy ENEMY-STARTING-VELOCITY (make-posn 100 100)) '()))
    '()
+   0
    ))
 
 (define empty-velocity (make-velocity 0 0))
@@ -84,7 +86,8 @@
                   (player-pos player)
                   (player-cd player))
      (world-enemy world)
-     (world-projectiles world))))
+     (world-projectiles world)
+     (world-enemy-spawn-cd world))))
 
 (define BACKGROUND
   (empty-scene WIDTH HEIGHT))
@@ -150,7 +153,6 @@
                                          (hit? projectile enemy)))))
           enemies))
 
-; TODO: spawn enemies
 ; TODO: enemy spawn projectiles
 
 ; if the enemy hits the wall, it bounce by reversing its speed
@@ -170,8 +172,19 @@
          [velocity (bounce (enemy-velocity enemy) pos)])
     (make-enemy velocity (move pos velocity))))
 
-(define (enemy-tick enemies projectiles)
-  (map move-enemy (remove-enemy enemies projectiles)))
+(define ENEMY-SPAWN-POINT (make-posn 200 200))
+(define ENEMY-SPAWN-CD 50)
+
+(define (enemy-tick enemies projectiles enemy-spawn-cd)
+  (let ([current-enemies (map move-enemy (remove-enemy enemies projectiles))])
+    (cond
+      [(eq? enemy-spawn-cd 0) (cons (make-enemy ENEMY-STARTING-VELOCITY ENEMY-SPAWN-POINT) current-enemies)]
+      [else current-enemies])))
+
+(define (make-timer-ticker timeout)
+  (λ (current-time) (if (eq? current-time 0) timeout (- current-time 1))))
+
+(define enemy-spawn-timer (make-timer-ticker ENEMY-SPAWN-CD))
 
 (define always-up-velocity (make-velocity 0 (- PROJECTILE-SPEED)))
 
@@ -195,12 +208,13 @@
 (define (world-tick world)
   (let ([player (world-player world)]
         [enemy  (world-enemy world)]
-        [projectiles (world-projectiles world)])
+        [projectiles (world-projectiles world)]
+        [spawn-cd (world-enemy-spawn-cd world)])
     (make-world
      (player-tick player)
-     ; control the enemy on tick. always turn right
-     (enemy-tick enemy projectiles)
-     (projectiles-tick player projectiles))))
+     (enemy-tick enemy projectiles spawn-cd)
+     (projectiles-tick player projectiles)
+     (enemy-spawn-timer spawn-cd))))
 
 ;============================================== Render ==============================================
 
