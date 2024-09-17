@@ -24,29 +24,33 @@
 ; - a list of *projectiles*
 ;   projectiles: TODO: when player or enemy touches other's projectiles, they died.
 ;                but they will not die if the projectile is emitted by themselves.
+; - points
 
 (define-struct velocity (x y))
 
 (define-struct player (velocity pos cd))
 (define PLAYER-SPEED 10)
 
-(define-struct enemy (velocity pos))
+; enemy hp:
+; - 0: hitted
+; - 1: alive
+(define-struct enemy (velocity pos hp))
 (define ENEMY-SPEED 10)
 (define ENEMY-STARTING-VELOCITY (make-velocity ENEMY-SPEED 0))
 
 (define-struct projectile (velocity pos emitter))
 (define PROJECTILE-SPEED 50)
 
-(define-struct world (player enemy projectiles enemy-spawn-cd))
+(define-struct world (player enemy projectiles enemy-spawn-cd points))
 (define WIDTH 600)
 (define HEIGHT 800)
 
 (define start-state
   (make-world
    (make-player (make-velocity 0 0) (make-posn WIDTH HEIGHT) 0)
-   (cons (make-enemy ENEMY-STARTING-VELOCITY (make-posn 200 200))
-         (cons (make-enemy ENEMY-STARTING-VELOCITY (make-posn 100 100)) '()))
    '()
+   '()
+   0
    0
    ))
 
@@ -87,7 +91,8 @@
                   (player-cd player))
      (world-enemy world)
      (world-projectiles world)
-     (world-enemy-spawn-cd world))))
+     (world-enemy-spawn-cd world)
+     (world-points world))))
 
 (define BACKGROUND
   (empty-scene WIDTH HEIGHT))
@@ -146,12 +151,20 @@
          [e-pos (enemy-pos enemy)])
     (< (eulicid-distance-square p-pos e-pos) (math-square (+ ENEMY-HITBOX-DIAMETER PROJECTILE-RADIUS)))))
 
-(define (remove-enemy enemies projectiles)
-  (filter (λ (enemy)
-            (noneof projectiles
-                    (λ (projectile) (and (equal? (projectile-emitter projectile) 'player)
-                                         (hit? projectile enemy)))))
-          enemies))
+(define (test-enemy-projectile-hit enemy projectile)
+  (and (equal? (projectile-emitter projectile) 'player)
+       (hit? projectile enemy)))
+
+(define (test-enemy-hit enemy projectiles)
+  (make-enemy
+   (enemy-velocity enemy)
+   (enemy-pos enemy)
+   (cond
+     [(noneof projectiles (λ (projectile) (test-enemy-projectile-hit enemy projectile))) (enemy-hp enemy)]
+     [else (- 1 (enemy-hp enemy))])))
+
+(define (test-enemies-hit enemies projectiles)
+  (map (λ (enemy) (test-enemy-hit enemy projectiles)) enemies))
 
 ; TODO: enemy spawn projectiles
 
@@ -169,16 +182,28 @@
 
 (define (move-enemy enemy)
   (let* ([pos (enemy-pos enemy)]
-         [velocity (bounce (enemy-velocity enemy) pos)])
-    (make-enemy velocity (move pos velocity))))
+         [velocity (bounce (enemy-velocity enemy) pos)]
+         [hp (enemy-hp enemy)])
+    (make-enemy velocity (move pos velocity) hp)))
 
 (define ENEMY-SPAWN-POINT (make-posn 200 200))
 (define ENEMY-SPAWN-CD 50)
 
+(define (zombie? enemy) (equal? 0 (enemy-hp enemy)))
+
+(define (alive? enemy) (not (zombie? enemy)))
+
+; 1. remove hitted enemy
+; 2. test hit
+; 3. move enemy
+; 4. spawn new enemy.
 (define (enemy-tick enemies projectiles enemy-spawn-cd)
-  (let ([current-enemies (map move-enemy (remove-enemy enemies projectiles))])
+  (let* (
+         [non-zombie-enemies (filter alive? enemies)]
+         [hitted-enemies (test-enemies-hit non-zombie-enemies projectiles)]
+         [current-enemies (map move-enemy hitted-enemies)])
     (cond
-      [(eq? enemy-spawn-cd 0) (cons (make-enemy ENEMY-STARTING-VELOCITY ENEMY-SPAWN-POINT) current-enemies)]
+      [(eq? enemy-spawn-cd 0) (cons (make-enemy ENEMY-STARTING-VELOCITY ENEMY-SPAWN-POINT 1) current-enemies)]
       [else current-enemies])))
 
 (define (make-timer-ticker timeout)
@@ -205,16 +230,30 @@
               (not (eq? (posn-y (projectile-pos projectile)) 0)))
             (map move-projectile projectiles))))
 
+(define (allthat p? l)
+  (cond
+    [(eq? l '()) 0]
+    [else (let* ([l-car (car l)]
+                 [l-cdr (cdr l)]
+                 [lcarp? (p? l-car)])
+            (+ (if lcarp? 1 0) (allthat p? l-cdr)))]))
+
+; TODO: identify points from enemy-hitted
+(define (points-tick points enemies)
+  (+ points (allthat zombie? enemies)))
+
 (define (world-tick world)
   (let ([player (world-player world)]
-        [enemy  (world-enemy world)]
+        [enemies  (world-enemy world)]
         [projectiles (world-projectiles world)]
-        [spawn-cd (world-enemy-spawn-cd world)])
+        [spawn-cd (world-enemy-spawn-cd world)]
+        [points (world-points world)])
     (make-world
      (player-tick player)
-     (enemy-tick enemy projectiles spawn-cd)
+     (enemy-tick enemies projectiles spawn-cd)
      (projectiles-tick player projectiles)
-     (enemy-spawn-timer spawn-cd))))
+     (enemy-spawn-timer spawn-cd)
+     (points-tick points enemies))))
 
 ;============================================== Render ==============================================
 
@@ -245,13 +284,21 @@
 (define (draw-projectiles-on projectiles canvas)
   (place-entities-on (map projectile-pos projectiles) projectile-sprite canvas))
 
+(define (draw-points-on points canvas)
+  (place-image (text points 30 "red")
+               300
+               50
+               canvas))
+
 (define (render world)
   (let ([player (world-player world)]
         [enemy (world-enemy world)]
-        [projectiles (world-projectiles world)])
-    (draw-player-on player
-                    (draw-enemies-on enemy
-                                     (draw-projectiles-on projectiles BACKGROUND)))))
+        [projectiles (world-projectiles world)]
+        [points (world-points world)])
+    (draw-points-on (number->string points)
+                    (draw-player-on player
+                                    (draw-enemies-on enemy
+                                                     (draw-projectiles-on projectiles BACKGROUND))))))
 
 ; if the player touches the enemy, we consider the game ends.
 (define (lose world)
