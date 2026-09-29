@@ -4,7 +4,7 @@
 ;; Htdw Command-line Launcher
 ;; ====================================================================
 
-(require "../lib/main.rkt")
+(require "../main.rkt")
 
-(run)
-
+(module+ main
+  (run))

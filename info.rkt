@@ -6,3 +6,5 @@
 (define pkg-desc "A fixed-screen 2D Danmaku shooter in modern Racket")
 (define deps '("base" "gui-lib" "draw-lib"))
 (define build-deps '("rackunit-lib"))
+(define gracket-launcher-libraries '("main.rkt"))
+(define gracket-launcher-names '("htdw"))

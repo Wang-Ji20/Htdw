@@ -56,7 +56,7 @@
           ;; Restart Key when Game Over
           [(and (world-game-over? current-world)
                 (or (eq? code #\r) (eq? code #\R) (eq? code #\return) (eq? code 'return)))
-           (set! current-world (world-restart current-world))]
+           (set! current-world (world-restart))]
 
           ;; Regular Key Press
           [else

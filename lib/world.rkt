@@ -43,7 +43,7 @@
          #f))
 
 ;; Restart World State
-(define (world-restart [w #f])
+(define (world-restart)
   (world-init))
 
 ;; Key matching helpers

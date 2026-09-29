@@ -1,7 +1,7 @@
 #lang racket/base
 
 ;; ====================================================================
-;; Backward-Compatible Root Launcher & Facade
+;; Htdw - Danmaku Shooter: Canonical Package Entry Point
 ;; ====================================================================
 
 (require "lib/config.rkt"
@@ -10,7 +10,7 @@
          "lib/combat.rkt"
          "lib/world.rkt"
          "lib/render.rkt"
-         "lib/main.rkt")
+         "lib/gui.rkt")
 
 (provide (all-from-out "lib/config.rkt")
          (all-from-out "lib/geometry.rkt")
@@ -18,7 +18,7 @@
          (all-from-out "lib/combat.rkt")
          (all-from-out "lib/world.rkt")
          (all-from-out "lib/render.rkt")
-         (all-from-out "lib/main.rkt"))
+         (all-from-out "lib/gui.rkt"))
 
 (module+ main
   (run))
