@@ -5,7 +5,8 @@
          "config.rkt"
          "geometry.rkt"
          "entities.rkt"
-         "combat.rkt")
+         "combat.rkt"
+         "projectiles.rkt")
 
 (provide (struct-out world)
          world-init
@@ -13,7 +14,9 @@
          world-key-down
          world-key-up
          world-restart
-         compute-player-velocity)
+         compute-player-velocity
+         step-enemy
+         step-enemy-and-shoot)
 
 ;; World State Structure
 ;; player         : player
@@ -104,21 +107,26 @@
 
   (velocity next-vx next-vy))
 
+;; Move enemy entity
 (define (step-enemy e)
   (define v (bounce-enemy-velocity (enemy-velocity e) (enemy-pos e)))
   (define p (posn+vec (enemy-pos e) v))
   (struct-copy enemy e [velocity v] [pos p]))
 
-;; Projectile motion and boundary check
-(define (step-projectile proj)
-  (struct-copy projectile proj [pos (posn+vec (projectile-pos proj) (projectile-velocity proj))]))
-
-(define (projectile-alive? proj)
-  (in-bounds? (projectile-pos proj)
-              (- PROJECTILE-RADIUS)
-              (- PROJECTILE-RADIUS)
-              (+ WIDTH PROJECTILE-RADIUS)
-              (+ HEIGHT PROJECTILE-RADIUS)))
+;; Steps enemy movement and projectile emission
+;; Returns: (values next-enemy-state (listof projectile))
+(define (step-enemy-and-shoot e target-p-pos)
+  (define v (bounce-enemy-velocity (enemy-velocity e) (enemy-pos e)))
+  (define p (posn+vec (enemy-pos e) v))
+  (define cd (enemy-shoot-cd e))
+  (define pat (enemy-pattern e))
+  (if (<= cd 0)
+      (let ([fired-projs (emit-enemy-projectiles pat p target-p-pos)]
+            [next-pat (advance-enemy-pattern pat)])
+        (values (enemy v p (enemy-hp e) ENEMY-SHOOT-CD next-pat)
+                fired-projs))
+      (values (enemy v p (enemy-hp e) (- cd 1) pat)
+              '())))
 
 ;; Pure Simulation Step
 (define (world-step w)
@@ -141,18 +149,13 @@
         (define next-p-cd (if firing? PLAYER-COOLDOWN (- p-cd 1)))
         (define next-player (player p-vel next-p-pos next-p-cd))
 
-        ;; 2. Firing Projectiles
-        (define updated-projs
+        ;; 2. Player Firing Projectiles
+        (define player-projs
           (if firing?
-              (cons (make-player-projectile next-p-pos (velocity 0 (- PROJECTILE-SPEED)))
-                    projectiles)
-              projectiles))
+              (list (make-player-projectile next-p-pos (velocity 0 (- PROJECTILE-SPEED))))
+              '()))
 
-        ;; 3. Move Projectiles & Prune Off-screen
-        (define moved-projs
-          (filter projectile-alive? (map step-projectile updated-projs)))
-
-        ;; 4. Enemy Spawning & Movement
+        ;; 3. Enemy Spawning, Movement & Shooting
         (define spawn-ready? (<= spawn-cd 0))
         (define next-spawn-cd (if spawn-ready? ENEMY-SPAWN-CD (- spawn-cd 1)))
         (define enemies-with-spawn
@@ -162,11 +165,23 @@
                                 1)
                     enemies)
               enemies))
-        (define moved-enemies (map step-enemy enemies-with-spawn))
+
+        (define-values (moved-enemies new-enemy-projs)
+          (for/fold ([stepped-enemies '()]
+                     [all-emitted '()])
+                    ([e (in-list enemies-with-spawn)])
+            (define-values (next-e emitted) (step-enemy-and-shoot e next-p-pos))
+            (values (cons next-e stepped-enemies)
+                    (append emitted all-emitted))))
+
+        ;; 4. Move Projectiles & Prune Off-screen
+        (define all-projs (append player-projs new-enemy-projs projectiles))
+        (define moved-projs
+          (filter projectile-alive? (map step-projectile all-projs)))
 
         ;; 5. Combat Resolution
         (define-values (surv-projs surv-enemies gained-points)
-          (resolve-combat moved-projs moved-enemies))
+          (resolve-combat moved-projs (reverse moved-enemies)))
 
         ;; 6. Check Game Over Condition
         (define hit-by-enemy?
@@ -215,9 +230,30 @@
   ;; Enemy spawn on step
   (check-equal? (length (world-enemies w1)) 1 "First step spawns an enemy")
 
-  ;; Game over condition triggers on overlap (player cd set to 10 so player doesn't shoot the enemy)
+  ;; Enemy shooting triggers when cd is 0
+  (define ready-enemy (make-enemy (posn 300 100) (velocity 0 0) 1 0 'vertical))
+  (define w-ready (world (make-player (posn 300 700) (velocity 0 0) 10)
+                         (list ready-enemy)
+                         '()
+                         100
+                         0
+                         (set)
+                         #f))
+  (define w-after-shot (world-step w-ready))
+  (check-true (> (length (world-projectiles w-after-shot)) 0) "Enemy fired projectiles into world")
+  (define enemy-bullet (car (world-projectiles w-after-shot)))
+  (check-pred enemy-projectile? enemy-bullet)
+
+  ;; Game over condition triggers on enemy collision
   (define p-hit (make-player (posn 200 200) (velocity 0 0) 10))
   (define e-hit (make-enemy (posn 200 200)))
   (define w-doomed (world p-hit (list e-hit) '() 10 0 (set) #f))
   (define w-lost (world-step w-doomed))
-  (check-true (world-game-over? w-lost)))
+  (check-true (world-game-over? w-lost) "Collision with enemy triggers game over")
+
+  ;; Game over condition triggers on enemy bullet hit
+  (define p-bullet-target (make-player (posn 300 700) (velocity 0 0) 10))
+  (define fatal-bullet (make-enemy-projectile (posn 300 700) (velocity 0 0)))
+  (define w-bullet-doom (world p-bullet-target '() (list fatal-bullet) 100 0 (set) #f))
+  (define w-bullet-lost (world-step w-bullet-doom))
+  (check-true (world-game-over? w-bullet-lost) "Hit by enemy bullet triggers game over"))

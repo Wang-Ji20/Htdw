@@ -6,6 +6,7 @@
 
 (require "lib/config.rkt"
          "lib/geometry.rkt"
+         "lib/projectiles.rkt"
          "lib/entities.rkt"
          "lib/combat.rkt"
          "lib/world.rkt"
@@ -14,6 +15,7 @@
 
 (provide (all-from-out "lib/config.rkt")
          (all-from-out "lib/geometry.rkt")
+         (all-from-out "lib/projectiles.rkt")
          (all-from-out "lib/entities.rkt")
          (all-from-out "lib/combat.rkt")
          (all-from-out "lib/world.rkt")
@@ -26,6 +28,7 @@
 (module+ test
   (require rackunit
            (submod "lib/geometry.rkt" test)
+           (submod "lib/projectiles.rkt" test)
            (submod "lib/combat.rkt" test)
            (submod "lib/world.rkt" test)
            (submod "lib/render.rkt" test)))

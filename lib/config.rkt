@@ -41,7 +41,11 @@
 ;; ====================================================================
 
 (define PROJECTILE-RADIUS 5)
-(define PROJECTILE-SPEED 18) ; px per frame upwards
+(define PROJECTILE-SPEED 18) ; px per frame upwards (player shot)
+(define ENEMY-BULLET-SPEED 4) ; px per frame (enemy shot)
+(define ENEMY-SHOOT-CD 75)   ; frames between enemy shots (1.25s at 60 FPS)
+(define RADIAL-BULLET-COUNT 8) ; number of bullets in radial ring emission
+(define BOUNCING-BULLET-BOUNCES 1) ; default bounce count for bouncing bullets
 
 ;; ====================================================================
 ;; Asset Paths

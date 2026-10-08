@@ -25,10 +25,26 @@
 ;; Brushes and Pens
 (define bg-color (make-color 16 18 32))
 (define bg-brush (new brush% [color bg-color] [style 'solid]))
+(define no-pen   (new pen%   [style 'transparent]))
 
-(define bullet-brush (new brush% [color (make-color 255 60 60)] [style 'solid]))
-(define bullet-pen   (new pen%   [color (make-color 255 200 100)] [width 1] [style 'solid]))
-(define no-pen       (new pen%   [style 'transparent]))
+;; Projectile Pens & Brushes for distinct visual styles
+(define player-bullet-brush (new brush% [color (make-color 255 235 70)]  [style 'solid]))
+(define player-bullet-pen   (new pen%   [color (make-color 255 255 220)] [width 1.5] [style 'solid]))
+
+(define vertical-bullet-brush (new brush% [color (make-color 80 180 255)]  [style 'solid]))
+(define vertical-bullet-pen   (new pen%   [color (make-color 210 245 255)] [width 1]   [style 'solid]))
+
+(define radial-bullet-brush (new brush% [color (make-color 0 230 190)]   [style 'solid]))
+(define radial-bullet-pen   (new pen%   [color (make-color 190 255 240)] [width 1]   [style 'solid]))
+
+(define aimed-bullet-brush (new brush% [color (make-color 255 50 70)]   [style 'solid]))
+(define aimed-bullet-pen   (new pen%   [color (make-color 255 190 190)] [width 1]   [style 'solid]))
+
+(define bouncing-bullet-brush (new brush% [color (make-color 255 150 20)]  [style 'solid]))
+(define bouncing-bullet-pen   (new pen%   [color (make-color 255 235 110)] [width 1.5] [style 'solid]))
+
+(define default-bullet-brush (new brush% [color (make-color 255 70 70)]   [style 'solid]))
+(define default-bullet-pen   (new pen%   [color (make-color 255 200 120)] [width 1]   [style 'solid]))
 
 (define hud-font (make-font #:size 16 #:family 'modern #:weight 'bold))
 (define hud-color (make-color 255 220 50))
@@ -54,13 +70,24 @@
   (define h (send bm get-height))
   (send dc draw-bitmap bm (- cx (/ w 2)) (- cy (/ h 2))))
 
-;; Draws a projectile
+;; Selects visual style for a projectile
+(define (get-projectile-style proj)
+  (case (projectile-type proj)
+    [(player)   (values player-bullet-brush player-bullet-pen)]
+    [(vertical) (values vertical-bullet-brush vertical-bullet-pen)]
+    [(radial)   (values radial-bullet-brush radial-bullet-pen)]
+    [(aimed)    (values aimed-bullet-brush aimed-bullet-pen)]
+    [(bouncing) (values bouncing-bullet-brush bouncing-bullet-pen)]
+    [else       (values default-bullet-brush default-bullet-pen)]))
+
+;; Draws a projectile with style corresponding to its type
 (define (draw-projectile dc proj)
   (define p (projectile-pos proj))
   (define x (posn-x p))
   (define y (posn-y p))
-  (send dc set-brush bullet-brush)
-  (send dc set-pen bullet-pen)
+  (define-values (br pen) (get-projectile-style proj))
+  (send dc set-brush br)
+  (send dc set-pen pen)
   (send dc draw-ellipse (- x PROJECTILE-RADIUS)
                         (- y PROJECTILE-RADIUS)
                         (* 2 PROJECTILE-RADIUS)
@@ -142,6 +169,17 @@
   (define test-w (world-init))
   ;; Renders successfully to dc without crashing or throwing
   (check-not-exn (λ () (render-world test-w test-dc)))
+
+  ;; Render world containing all types of projectiles
+  (define multi-proj-w
+    (struct-copy world test-w
+                 [projectiles
+                  (list (make-player-projectile (posn 100 100) (velocity 0 -10))
+                        (make-vertical-projectile (posn 150 150))
+                        (make-radial-projectile (posn 200 200) (velocity 2 2))
+                        (make-aimed-projectile (posn 250 250) (velocity 0 4))
+                        (make-bouncing-projectile (posn 300 300) (velocity 3 3)))]))
+  (check-not-exn (λ () (render-world multi-proj-w test-dc)))
 
   ;; Game over rendering
   (define dead-w (struct-copy world test-w [game-over? #t]))

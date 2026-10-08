@@ -20,18 +20,18 @@
 (define (projectile-hits-enemy? proj e)
   (and (player-projectile? proj)
        (circles-intersect? (projectile-pos proj) PROJECTILE-RADIUS
-                          (enemy-pos e) ENEMY-RADIUS)))
+                           (enemy-pos e) ENEMY-RADIUS)))
 
 ;; Checks if player collides with an enemy
 (define (player-collides-enemy? p e)
   (circles-intersect? (player-pos p) PLAYER-RADIUS
-                     (enemy-pos e) ENEMY-RADIUS))
+                      (enemy-pos e) ENEMY-RADIUS))
 
 ;; Checks if player collides with an enemy projectile
 (define (player-collides-projectile? p proj)
   (and (enemy-projectile? proj)
        (circles-intersect? (player-pos p) PLAYER-RADIUS
-                          (projectile-pos proj) PROJECTILE-RADIUS)))
+                           (projectile-pos proj) PROJECTILE-RADIUS)))
 
 ;; Pure functional collision resolution between projectiles and enemies.
 ;; Consumes colliding projectiles, applies damage to enemies, and tallies points.

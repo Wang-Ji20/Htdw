@@ -1,50 +1,39 @@
 #lang racket/base
 
-(require "geometry.rkt")
+(require "geometry.rkt"
+         "config.rkt"
+         "projectiles.rkt")
 
 (provide (struct-out player)
          (struct-out enemy)
-         (struct-out projectile)
          make-player
          make-enemy
-         make-player-projectile
-         make-enemy-projectile
-         player-projectile?
-         enemy-projectile?)
+         (all-from-out "projectiles.rkt"))
 
-;; Player entity
+;; ====================================================================
+;; Player Entity
+;; ====================================================================
 ;; velocity : velocity
 ;; pos      : posn
 ;; cd       : non-negative integer (frames until next shot)
 (struct player (velocity pos cd) #:transparent)
 
-;; Enemy entity
-;; velocity : velocity
-;; pos      : posn
-;; hp       : integer
-(struct enemy (velocity pos hp) #:transparent)
-
-;; Projectile entity
-;; velocity : velocity
-;; pos      : posn
-;; emitter  : 'player | 'enemy
-(struct projectile (velocity pos emitter) #:transparent)
-
-;; Constructors
 (define (make-player p [v (velocity 0 0)] [cd 0])
   (player v p cd))
 
-(define (make-enemy p [v (velocity 0 0)] [hp 1])
-  (enemy v p hp))
+;; ====================================================================
+;; Enemy Entity
+;; ====================================================================
+;; velocity : velocity
+;; pos      : posn
+;; hp       : integer
+;; shoot-cd : non-negative integer (frames until next shot)
+;; pattern  : pattern-descriptor (symbol, list of symbols, or custom procedure)
+(struct enemy (velocity pos hp shoot-cd pattern) #:transparent)
 
-(define (make-player-projectile p v)
-  (projectile v p 'player))
-
-(define (make-enemy-projectile p v)
-  (projectile v p 'enemy))
-
-(define (player-projectile? proj)
-  (eq? (projectile-emitter proj) 'player))
-
-(define (enemy-projectile? proj)
-  (eq? (projectile-emitter proj) 'enemy))
+(define (make-enemy p
+                    [v (velocity 0 0)]
+                    [hp 1]
+                    [shoot-cd ENEMY-SHOOT-CD]
+                    [pattern DEFAULT-ENEMY-PATTERN-CYCLE])
+  (enemy v p hp shoot-cd pattern))
